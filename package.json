@@ -1,0 +1,29 @@
+{
+  "name": "docaifunction",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "deploy": "gcloud builds submit --tag gcr.io/grinder-cloud/essentia --timeout=9000 && gcloud run deploy essentia --image gcr.io/grinder-cloud/essentia --region=us-east1 --platform managed --allow-unauthenticated --min-instances=0 --max-instances=2 && gcloud run services update-traffic essentia --region=us-east1 --to-revisions LATEST=100"
+  },
+  "author": "Mansoor",
+  "license": "ISC",
+  "devDependencies": {
+    "@google-cloud/functions-framework": "^2.1.1"
+  },
+  "dependencies": {
+    "@google-cloud/storage": "^6.4.1",
+    "axios": "^0.27.2",
+    "body-parser": "^1.20.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.1",
+    "essentia.js": "^0.1.3",
+    "express": "^4.18.1",
+    "lodash": "^4.17.21",
+    "node-fetch": "2",
+    "uuid": "^8.3.2"
+  }
+}

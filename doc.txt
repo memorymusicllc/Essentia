@@ -1,0 +1,6 @@
+- Audio file input/output: ability to read and write nearly all audio file formats (wav, mp3, ogg, flac, etc.)
+- Standard signal processing blocks: FFT, DCT, frame cutter, windowing, envelope, smoothing
+- Spectral descriptors: Bark/Mel/ERB bands, MFCC, GFCC, LPC, spectral peaks, complexity, roll-off, contrast, HFC, inharmonicity and dissonance
+- Tonal descriptors: Pitch salience function, predominant melody and pitch, HPCP (chroma) related features, chords, key and scale, tuning frequency
+- Rhythm descriptors: beat detection, BPM, onset detection, rhythm transform, beat loudness
+- Other high-level descriptors: danceability, dynamic complexity, audio segmentation, SVM classifier, TensorFlow wrapper for inference
