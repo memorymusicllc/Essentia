@@ -66,7 +66,7 @@ app.post('/', (req, res) => {
           let keyArray = []
           let scaleArray = []
           let tuningArray = []
-          let beatDetectionArray = []
+          let beatsDetectionArray = []
           let bpmArray = []
           let onsetDetectionArray = []
           let beatsLoudnessArray = []
@@ -80,7 +80,7 @@ app.post('/', (req, res) => {
           let contrastArray = []
           let inharmonicityArray = []
           let dissonanceArray = []
-          var vector, fft, dct, frameCutter, windowing, envelope, bark, mel, erb, mfcc, mfccNew, gfcc, gfccNew, lpc, lpcNew, spectralPeaks, complexity, rollOff, hfc, pitchSalience, pitchMelody, key, scale, tuningFrequency, beatDetection, bpm, onsetDetection, rhythm, beatsLoudness, danceability, dynamicComplexity, audioSegmentation, svm, tensorflowWrapper, chords, hpcp, contrast, inharmonicity, frequencies, magnitudes, harmonicPeaks, dissonance, sample
+          var vector, fft, dct, frameCutter, windowing, envelope, bark, mel, erb, mfcc, mfccNew, gfcc, gfccNew, lpc, lpcNew, spectralPeaks, complexity, rollOff, hfc, pitchSalience, pitchMelody, key, scale, tuningFrequency, beatsDetection, bpm, onsetDetection, rhythm, beatsLoudness, danceability, dynamicComplexity, audioSegmentation, svm, tensorflowWrapper, chords, hpcp, contrast, inharmonicity, frequencies, magnitudes, harmonicPeaks, dissonance, sample, signal
 
           let vecVecFloat = new essentia.module.VectorVectorFloat()
 
@@ -88,19 +88,20 @@ app.post('/', (req, res) => {
 
           for (var i = 0; i < frames.size(); i++) {
             vector = frames.get(i)
+            signal = frames.get(i)
             windowing = essentia.Windowing(vector, true).frame
             vector = essentia.Windowing(vector, true).frame
             vector = essentia.Spectrum(vector)['spectrum']
             fft = essentia.PitchYinFFT(vector)
             dct = essentia.DCT(vector)
-            frameCutter = essentia.FrameCutter(vector)
-            envelope = essentia.Envelope(vector)
+            frameCutter = essentia.FrameCutter(signal)
+            envelope = essentia.Envelope(signal)
             bark = essentia.BarkBands(vector)
             mel = essentia.MelBands(vector)
             erb = essentia.ERBBands(vector)
             mfcc = essentia.MFCC(vector)
             gfcc = essentia.GFCC(vector)
-            lpc = essentia.LPC(vector)
+            lpc = essentia.LPC(signal)
             spectralPeaks = essentia.SpectralPeaks(vector)
             complexity = essentia.DynamicComplexity(vector)
             rollOff = essentia.RollOff(vector)
@@ -121,8 +122,16 @@ app.post('/', (req, res) => {
             harmonicPeaks = essentia.HarmonicPeaks(frequencies, magnitudes, 0)
             inharmonicity = essentia.Inharmonicity(harmonicPeaks?.harmonicFrequencies, harmonicPeaks?.harmonicMagnitudes)
             dissonance = essentia.Dissonance(frequencies, magnitudes)
-            // sample = essentia.getAudioChannelDataFromURL(frames.get(i))
-            // beatDetection = essentia.LogSpectrum(frequencies)
+            beatsDetection = essentia.TempoTapDegara(signal)
+
+            beatsLoudness = essentia.Loudness(beatsDetection?.ticks)
+            audioSegmentation = essentia.ZeroCrossingRate(signal)
+
+            beatsDetection = {
+              ticks: essentia.vectorToArray(beatsDetection?.ticks)
+            }
+
+            // console.log('beatsDetection', audioSegmentation)
 
             danceability = {
               ...danceability,
@@ -139,22 +148,10 @@ app.post('/', (req, res) => {
               spectralValley: essentia.vectorToArray(contrast?.spectralValley)
             }
 
-            // svm = essentia.svm(vector)
-            // try {
-            //   beatsLoudness = essentia.BeatsLoudness(frames.get(i))
-            // }
-            // catch (e) {
-            //   console.log('e', e)
-            // }
-            // beatDetection = essentia.BeatTrackerDegara(vector)
-            // spectralPeaks = essentia.MFCC(vector)
-            // spectralPeaks.frequencies = essentia.vectorToArray(spectralPeaks.frequencies)
-            // spectralPeaks.magnitudes = essentia.vectorToArray(spectralPeaks.magnitudes)
             mfccNew = {
               bands: essentia.vectorToArray(mfcc?.bands),
               mfcc: essentia.vectorToArray(mfcc?.mfcc)
             }
-
             gfccNew = {
               bands: essentia.vectorToArray(mfcc?.bands),
               gfcc: essentia.vectorToArray(gfcc?.gfcc)
@@ -175,6 +172,9 @@ app.post('/', (req, res) => {
               magnitudes: essentia.vectorToArray(spectralPeaks?.magnitudes)
             }
 
+            audioSegmentationArray.push(audioSegmentation)
+            beatsLoudnessArray.push(beatsLoudness)
+            beatsDetectionArray.push(beatsDetection)
             fftArray.push(fft)
             dctArray.push(essentia.vectorToArray(dct?.dct))
             frameCutterArray.push(essentia.vectorToArray(frameCutter?.frame))
@@ -206,6 +206,7 @@ app.post('/', (req, res) => {
 
             vecVecFloat.push_back(hpcp)
 
+            break
           }
 
           chords = essentia.ChordsDetection(vecVecFloat)
@@ -238,7 +239,10 @@ app.post('/', (req, res) => {
             contrast: contrastArray,
             inharmonicity: inharmonicityArray,
             dissonance: dissonanceArray,
-            chords
+            chords,
+            beatsDetection: beatsDetectionArray,
+            beatsLoudness: beatsLoudnessArray,
+            audioSegmentation: audioSegmentationArray
           }
 
           try {
@@ -247,8 +251,6 @@ app.post('/', (req, res) => {
           catch (err) {
             console.log(err)
           }
-
-          // sample = essentia.Resample(essentia.arrayToVector(audioArray), 44100)
 
           let keys = Object.keys(data)
 
@@ -272,6 +274,8 @@ app.post('/', (req, res) => {
             })
             blobStream.end(JSON.stringify(data[v]))
           }
+
+          return res.send({ success: true, result })
         })
       })
         .on('error', (e) => {
