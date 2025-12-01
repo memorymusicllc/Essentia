@@ -12,7 +12,6 @@
 
 import { MCPServer } from './mcp-server.js';
 import { handleAudioAnalysis } from './audio-handler.js';
-import { R2_BUCKET } from './config/r2Config.js';
 import { requireAuth, authenticateMCPRequest, SCOPES } from './middleware/auth.js';
 import { getGlobalRegistry, initializeRegistry } from './utils/service-registry.js';
 

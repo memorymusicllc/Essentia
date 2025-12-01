@@ -147,6 +147,3 @@ export async function getR2PublicUrl(bucket, key, options = {}) {
   return `https://${accountId}.r2.cloudflarestorage.com/${bucketName}/${key}`;
 }
 
-// Export default R2_BUCKET binding for convenience
-export { R2_BUCKET } from '../worker.js';
-
