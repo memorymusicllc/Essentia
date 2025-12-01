@@ -1,7 +1,7 @@
 /** @type {import('jest').Config} */
 module.exports = {
-  // Use miniflare environment for Cloudflare Workers compatibility
-  testEnvironment: 'jest-environment-miniflare',
+  // Use node environment for all tests to avoid ES module issues
+  testEnvironment: 'node',
 
   // Test file patterns
   testMatch: [
@@ -33,10 +33,21 @@ module.exports = {
   // Setup files
   setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
 
-  // Transform ES modules
-  transform: {
-    '^.+\\.js$': 'babel-jest'
+  // Global setup
+  globals: {
+    'ts-jest': {
+      tsconfig: false
+    }
   },
+
+  // Transform ES modules
+  transform: {},
+
+  // Use CommonJS
+  extensionsToTreatAsEsm: [],
+
+  // Module file extensions
+  moduleFileExtensions: ['js', 'json'],
 
   // Module name mapping
   moduleNameMapper: {

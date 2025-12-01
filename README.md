@@ -1,6 +1,14 @@
 # Essentia Audio Analysis Service
 
-A cloud-based audio analysis service that performs comprehensive audio feature extraction using the Essentia.js library. The service accepts audio file URLs, performs extensive audio analysis, and stores the results in Google Cloud Storage.
+A cloud-based audio analysis service that performs comprehensive audio feature extraction using the Essentia.js library. The service accepts audio file URLs, performs extensive audio analysis, and stores the results in Cloudflare R2.
+
+**✨ Now Enhanced with Pow3r Workflow Orchestrator & Pow3r Pass Authentication**
+
+- 🔐 **Pow3r Pass ACL**: Enterprise-grade authentication with granular permissions
+- ☁️ **Cloudflare Edge**: Global distribution with sub-10s response times
+- 🔄 **Workflow Orchestration**: Complex multi-step audio analysis pipelines
+- 🤖 **MCP Server**: Model Context Protocol for AI agent integration
+- 🧪 **E2E Testing**: Comprehensive test coverage with automated deployment
 
 ## Overview
 
@@ -354,7 +362,7 @@ docker run -p 8080:8080 \
 
 ### Accessing Results
 
-After a successful analysis, each analysis type is stored as a separate JSON file in Google Cloud Storage. You can access them via the URLs returned in the response:
+After a successful analysis, each analysis type is stored as a separate JSON file in Cloudflare R2. You can access them via the URLs returned in the response:
 
 ```javascript
 // Example: Accessing MFCC results
@@ -362,6 +370,81 @@ const mfccUrl = result.mfcc; // From API response
 const mfccData = await fetch(mfccUrl).then(r => r.json());
 console.log(mfccData);
 ```
+
+### E2E Testing & Pow3r Integration
+
+The service includes comprehensive E2E testing with Pow3r Workflow Orchestrator and Pow3r Pass authentication.
+
+#### Prerequisites
+
+```bash
+# Required environment variables
+export POW3R_PASS_TOKEN=your_pow3r_pass_token
+export ESSENTIA_URL=https://essentia.yourdomain.workers.dev
+export WORKFLOW_URL=https://config.superbots.link/mcp/workflow
+export POW3R_PASS_URL=https://config.superbots.link/pass
+```
+
+#### Run E2E Tests
+
+```bash
+# Install test dependencies
+npm install
+npx playwright install --with-deps
+
+# Run full E2E test suite
+npm run test:e2e
+
+# Run specific test suites
+npm run test:e2e:essentia     # Essentia API tests
+npm run test:e2e:workflow     # Workflow orchestrator tests
+
+# Deploy and test
+./deploy-e2e.sh              # Full deployment + testing
+./deploy-e2e.sh essentia-only # Essentia service only
+```
+
+#### Pow3r Pass ACL Validation
+
+Tests validate proper permission enforcement:
+
+| Scope | Description | Status |
+|-------|-------------|--------|
+| `audio:analyze` | Analyze audio files | ✅ Tested |
+| `metadata:read` | Read analysis results | ✅ Tested |
+| `beats:extract` | Extract beat markers | ✅ Tested |
+| `sections:detect` | Detect song sections | ✅ Tested |
+| `psychology:analyze` | Psychological analysis | ✅ Tested |
+
+#### Pow3r Workflow Orchestrator
+
+Complex audio analysis pipelines run on Cloudflare Edge:
+
+```javascript
+// Example workflow execution
+const workflow = {
+  name: 'audio-analysis-pipeline',
+  steps: [
+    'validate-input',
+    'download-audio',
+    'low-level-analysis',
+    'beat-analysis',
+    'section-detection',
+    'psychological-analysis',
+    'compile-results'
+  ],
+  authentication: {
+    pow3rPass: true,
+    requiredScopes: ['audio:analyze']
+  }
+};
+```
+
+#### Test Results
+
+- **HTML Report**: `playwright-report/index.html`
+- **JSON Results**: `test-results/e2e-results.json`
+- **Performance**: Sub-10s API responses, Edge execution validated
 
 ## Project Structure
 

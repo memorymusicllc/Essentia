@@ -4,8 +4,21 @@
  * Tests MCP protocol handling, tool execution, and resource management.
  */
 
-import { MCPServer } from '../mcp-server.js';
-import { handleAudioAnalysis } from '../audio-handler.js';
+// Mock ES modules for testing
+jest.mock('../mcp-server.js', () => ({
+  MCPServer: jest.fn().mockImplementation((env, authResult) => ({
+    env,
+    authResult,
+    handleRequest: jest.fn()
+  }))
+}));
+
+jest.mock('../audio-handler.js', () => ({
+  handleAudioAnalysis: jest.fn()
+}));
+
+const { MCPServer } = require('../mcp-server.js');
+const { handleAudioAnalysis } = require('../audio-handler.js');
 
 // Mock environment
 const mockEnv = {

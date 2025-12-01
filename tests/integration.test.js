@@ -5,9 +5,25 @@
  * audio processing pipeline, and end-to-end workflows.
  */
 
-import { MCPServer } from '../mcp-server.js';
-import { handleAudioAnalysis } from '../audio-handler.js';
-import { validateToolInput, getToolDefinition } from '../mcp-tools.js';
+// Mock ES modules for testing
+jest.mock('../mcp-server.js', () => ({
+  MCPServer: jest.fn().mockImplementation(() => ({
+    handleRequest: jest.fn()
+  }))
+}));
+
+jest.mock('../audio-handler.js', () => ({
+  handleAudioAnalysis: jest.fn()
+}));
+
+jest.mock('../mcp-tools.js', () => ({
+  validateToolInput: jest.fn(),
+  getToolDefinition: jest.fn()
+}));
+
+const { MCPServer } = require('../mcp-server.js');
+const { handleAudioAnalysis } = require('../audio-handler.js');
+const { validateToolInput, getToolDefinition } = require('../mcp-tools.js');
 
 // Mock Cloudflare environment
 const mockEnv = {

@@ -135,7 +135,16 @@ jest.mock('uuid', () => ({
 process.env.FRAME_SAMPLE_RATE = '5';
 process.env.WORKER_ENV = 'test';
 
-// Global test utilities
+// Global test utilities are now defined below
+
+// Console spy for testing
+global.consoleSpy = {
+  log: jest.spyOn(console, 'log').mockImplementation(() => {}),
+  error: jest.spyOn(console, 'error').mockImplementation(() => {}),
+  warn: jest.spyOn(console, 'warn').mockImplementation(() => {})
+};
+
+// Attach mock functions to global object
 global.createMockAudioData = (frames = 10) => {
   return Array.from({ length: frames }, (_, i) => ({
     pitch: [440 + i * 10, 442 + i * 10, 438 + i * 10],
@@ -161,13 +170,6 @@ global.createMockFeatures = () => ({
     value: 0.65
   }))
 });
-
-// Console spy for testing
-global.consoleSpy = {
-  log: jest.spyOn(console, 'log').mockImplementation(() => {}),
-  error: jest.spyOn(console, 'error').mockImplementation(() => {}),
-  warn: jest.spyOn(console, 'warn').mockImplementation(() => {})
-};
 
 // Cleanup after each test
 afterEach(() => {

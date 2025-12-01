@@ -505,5 +505,4 @@ export class MCPServer {
   }
 }
 
-// Export for use in worker
-export { MCPServer };
+// MCPServer class is already exported via 'export class MCPServer'

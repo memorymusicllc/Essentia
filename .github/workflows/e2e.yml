@@ -1,0 +1,188 @@
+name: Essentia E2E Tests
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'tests/e2e/**'
+      - 'src/**'
+      - 'worker.js'
+      - 'package.json'
+      - 'wrangler.toml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'tests/e2e/**'
+      - 'src/**'
+      - 'worker.js'
+      - 'package.json'
+      - 'wrangler.toml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to test against'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      test_suite:
+        description: 'Test suite to run'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - essentia
+          - workflow
+
+jobs:
+  e2e-tests:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'staging' }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Install Playwright
+      run: npx playwright install --with-deps
+
+    - name: Wait for services to be ready
+      run: |
+        echo "Waiting for Essentia service..."
+        timeout 300 bash -c 'until curl -f ${{ secrets.ESSENTIA_URL }}/health; do sleep 10; done' || true
+
+        echo "Waiting for Workflow Orchestrator..."
+        timeout 300 bash -c 'until curl -f ${{ secrets.WORKFLOW_URL }}/health; do sleep 10; done' || true
+
+        echo "Waiting for Pow3r Pass..."
+        timeout 300 bash -c 'until curl -f ${{ secrets.POW3R_PASS_URL }}/health; do sleep 10; done' || true
+
+    - name: Run E2E tests
+      env:
+        POW3R_PASS_TOKEN: ${{ secrets.POW3R_PASS_TOKEN }}
+        POW3R_PASS_MASTER_TOKEN: ${{ secrets.POW3R_PASS_MASTER_TOKEN }}
+        ESSENTIA_URL: ${{ secrets.ESSENTIA_URL }}
+        WORKFLOW_URL: ${{ secrets.WORKFLOW_URL }}
+        POW3R_PASS_URL: ${{ secrets.POW3R_PASS_URL }}
+        FRAME_SAMPLE_RATE: ${{ vars.FRAME_SAMPLE_RATE || 5 }}
+        TEST_TIMEOUT: ${{ vars.TEST_TIMEOUT || 600000 }}
+      run: |
+        if [ "${{ github.event.inputs.test_suite }}" = "essentia" ]; then
+          npm run test:e2e:essentia
+        elif [ "${{ github.event.inputs.test_suite }}" = "workflow" ]; then
+          npm run test:e2e:workflow
+        else
+          npm run test:e2e
+        fi
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: e2e-test-results-${{ github.run_id }}
+        path: |
+          test-results/
+          playwright-report/
+
+    - name: Generate test summary
+      if: always()
+      run: |
+        echo "## E2E Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        if [ -f "test-results/e2e-results.json" ]; then
+          PASSED=$(jq '.suites[0].specs | map(.tests | map(select(.results[0].status == "passed"))) | flatten | length' test-results/e2e-results.json)
+          FAILED=$(jq '.suites[0].specs | map(.tests | map(select(.results[0].status == "failed"))) | flatten | length' test-results/e2e-results.json)
+          TOTAL=$(jq '.suites[0].specs | map(.tests | length) | add' test-results/e2e-results.json)
+
+          echo "✅ Passed: $PASSED" >> $GITHUB_STEP_SUMMARY
+          echo "❌ Failed: $FAILED" >> $GITHUB_STEP_SUMMARY
+          echo "📊 Total: $TOTAL" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "⚠️  Test results not found" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Environment" >> $GITHUB_STEP_SUMMARY
+        echo "- Essentia URL: ${{ secrets.ESSENTIA_URL }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Workflow URL: ${{ secrets.WORKFLOW_URL }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Pow3r Pass: ✅ Configured" >> $GITHUB_STEP_SUMMARY
+        echo "- Cloudflare Edge: ✅ Enabled" >> $GITHUB_STEP_SUMMARY
+
+    - name: Notify on failure
+      if: failure()
+      run: |
+        echo "❌ E2E tests failed. Check the test results for details."
+        echo "🔗 View results: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+  deploy-to-production:
+    needs: e2e-tests
+    runs-on: ubuntu-latest
+    environment: production
+    if: |
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'push' &&
+      needs.e2e-tests.result == 'success'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Install Wrangler
+      run: npm install -g wrangler
+
+    - name: Deploy to production
+      run: wrangler deploy
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+    - name: Post-deployment health check
+      run: |
+        echo "Running post-deployment health checks..."
+        sleep 30
+
+        # Health check
+        curl -f ${{ secrets.ESSENTIA_URL }}/health || exit 1
+
+        # ACL validation
+        curl -f -H "Authorization: Bearer ${{ secrets.POW3R_PASS_TOKEN }}" \
+             ${{ secrets.ESSENTIA_URL }}/registry/status || exit 1
+
+        echo "✅ Production deployment successful"
+
+    - name: Create deployment notification
+      run: |
+        echo "## 🚀 Production Deployment Successful" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "✅ Essentia Audio Analysis deployed to production" >> $GITHUB_STEP_SUMMARY
+        echo "✅ All E2E tests passed" >> $GITHUB_STEP_SUMMARY
+        echo "✅ Pow3r Pass ACL validated" >> $GITHUB_STEP_SUMMARY
+        echo "✅ Cloudflare Edge execution confirmed" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Endpoints" >> $GITHUB_STEP_SUMMARY
+        echo "- Service: ${{ secrets.ESSENTIA_URL }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Health: ${{ secrets.ESSENTIA_URL }}/health" >> $GITHUB_STEP_SUMMARY
+        echo "- Registry: ${{ secrets.ESSENTIA_URL }}/registry/status" >> $GITHUB_STEP_SUMMARY
+        echo "- MCP: ${{ secrets.ESSENTIA_URL }}/mcp" >> $GITHUB_STEP_SUMMARY

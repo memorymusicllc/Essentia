@@ -5,7 +5,7 @@
  * story arcs, and psychological analysis.
  */
 
-import * as helpers from '../helpers.js';
+const helpers = require('../helpers.js');
 
 describe('helpers.js', () => {
   describe('generateLoopPoints', () => {

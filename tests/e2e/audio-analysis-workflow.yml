@@ -1,0 +1,310 @@
+---
+# Audio Analysis Workflow for Pow3r Workflow Orchestrator
+# Runs on Cloudflare Edge with Pow3r Pass authentication
+
+name: "essentia-audio-analysis-pipeline"
+version: "1.0.0"
+description: "Complete audio analysis pipeline with Essentia.js on Cloudflare Workers"
+category: "audio-processing"
+accessLevel: "authenticated"
+
+# Authentication requirements
+authentication:
+  pow3rPass:
+    required: true
+    scopes:
+      - "audio:analyze"
+      - "metadata:read"
+      - "beats:extract"
+      - "sections:detect"
+      - "psychology:analyze"
+  rateLimit:
+    requests: 50
+    window: "1h"
+
+# Input parameters
+parameters:
+  fileUrl:
+    type: "string"
+    description: "HTTPS URL to audio file"
+    validation:
+      pattern: "^https://.+"
+      required: true
+
+  analysisType:
+    type: "string"
+    description: "Type of analysis to perform"
+    default: "full"
+    enum: ["full", "basic", "metadata-only"]
+    required: false
+
+  includeMetadata:
+    type: "boolean"
+    description: "Include enhanced songwriting metadata"
+    default: true
+    required: false
+
+  frameSampleRate:
+    type: "integer"
+    description: "Frame sampling rate for processing efficiency"
+    default: 5
+    minimum: 1
+    maximum: 20
+    required: false
+
+  timeout:
+    type: "integer"
+    description: "Maximum execution time in milliseconds"
+    default: 300000
+    minimum: 30000
+    maximum: 600000
+    required: false
+
+# Workflow steps
+steps:
+  # Step 1: Validate input and authentication
+  - id: "validate-input"
+    name: "Validate Input Parameters"
+    tool: "essentia_validate_input"
+    parameters:
+      fileUrl: "{{parameters.fileUrl}}"
+      analysisType: "{{parameters.analysisType}}"
+    timeout: 5000
+    retry:
+      attempts: 1
+      backoff: "fixed"
+
+  # Step 2: Download and process audio file
+  - id: "download-audio"
+    name: "Download Audio File"
+    tool: "essentia_download_audio"
+    parameters:
+      fileUrl: "{{parameters.fileUrl}}"
+      timeout: "{{parameters.timeout}}"
+    dependsOn: ["validate-input"]
+    timeout: 60000
+    retry:
+      attempts: 3
+      backoff: "exponential"
+
+  # Step 3: Perform low-level audio analysis
+  - id: "low-level-analysis"
+    name: "Low-Level Audio Analysis"
+    tool: "essentia_low_level_analysis"
+    parameters:
+      audioBuffer: "{{steps.download-audio.result.audioBuffer}}"
+      frameSampleRate: "{{parameters.frameSampleRate}}"
+      analysisType: "{{parameters.analysisType}}"
+    dependsOn: ["download-audio"]
+    timeout: 120000
+    retry:
+      attempts: 2
+      backoff: "exponential"
+
+  # Step 4: Extract beat markers and rhythm
+  - id: "beat-analysis"
+    name: "Beat Detection and Analysis"
+    tool: "essentia_beat_analysis"
+    parameters:
+      features: "{{steps.low-level-analysis.result.features}}"
+      frameSampleRate: "{{parameters.frameSampleRate}}"
+    dependsOn: ["low-level-analysis"]
+    timeout: 30000
+    retry:
+      attempts: 2
+      backoff: "fixed"
+
+  # Step 5: Detect song sections (parallel with beat analysis)
+  - id: "section-detection"
+    name: "Song Section Detection"
+    tool: "essentia_section_detection"
+    parameters:
+      features: "{{steps.low-level-analysis.result.features}}"
+      frameSampleRate: "{{parameters.frameSampleRate}}"
+    dependsOn: ["low-level-analysis"]
+    timeout: 30000
+    retry:
+      attempts: 2
+      backoff: "fixed"
+
+  # Step 6: Generate loop points
+  - id: "loop-generation"
+    name: "Loop Points Generation"
+    tool: "essentia_loop_generation"
+    parameters:
+      beats: "{{steps.beat-analysis.result.beats}}"
+      loopLengths: [4, 8, 16]
+    dependsOn: ["beat-analysis"]
+    timeout: 15000
+    retry:
+      attempts: 1
+      backoff: "fixed"
+
+  # Step 7: Extract motifs and quotes (conditional)
+  - id: "motif-analysis"
+    name: "Motif and Quote Analysis"
+    tool: "essentia_motif_analysis"
+    parameters:
+      melody: "{{steps.low-level-analysis.result.pitchMelody}}"
+      harmony: "{{steps.low-level-analysis.result.chords}}"
+      frameSampleRate: "{{parameters.frameSampleRate}}"
+    dependsOn: ["low-level-analysis"]
+    condition: "{{parameters.includeMetadata}}"
+    timeout: 45000
+    retry:
+      attempts: 2
+      backoff: "exponential"
+
+  # Step 8: Psychological analysis
+  - id: "psychological-analysis"
+    name: "Psychological Descriptors Analysis"
+    tool: "essentia_psychological_analysis"
+    parameters:
+      danceability: "{{steps.low-level-analysis.result.danceability}}"
+      energy: "{{steps.low-level-analysis.result.dynamicComplexity}}"
+      tempo: "{{steps.low-level-analysis.result.bpm}}"
+      frameSampleRate: "{{parameters.frameSampleRate}}"
+    dependsOn: ["low-level-analysis"]
+    condition: "{{parameters.includeMetadata}}"
+    timeout: 30000
+    retry:
+      attempts: 2
+      backoff: "exponential"
+
+  # Step 9: Analyze story arc
+  - id: "story-arc-analysis"
+    name: "Story Arc Analysis"
+    tool: "essentia_story_arc_analysis"
+    parameters:
+      melody: "{{steps.low-level-analysis.result.pitchMelody}}"
+      harmony: "{{steps.low-level-analysis.result.chords}}"
+      frameSampleRate: "{{parameters.frameSampleRate}}"
+    dependsOn: ["low-level-analysis", "motif-analysis"]
+    condition: "{{parameters.includeMetadata}}"
+    timeout: 30000
+    retry:
+      attempts: 2
+      backoff: "exponential"
+
+  # Step 10: Generate section-level metadata
+  - id: "section-metadata"
+    name: "Section-Level Metadata"
+    tool: "essentia_section_metadata"
+    parameters:
+      sections: "{{steps.section-detection.result.sections}}"
+      features: "{{steps.low-level-analysis.result.features}}"
+      frameSampleRate: "{{parameters.frameSampleRate}}"
+    dependsOn: ["section-detection", "low-level-analysis"]
+    condition: "{{parameters.includeMetadata}}"
+    timeout: 30000
+    retry:
+      attempts: 2
+      backoff: "exponential"
+
+  # Step 11: Generate loop-level metadata
+  - id: "loop-metadata"
+    name: "Loop-Level Metadata"
+    tool: "essentia_loop_metadata"
+    parameters:
+      loops: "{{steps.loop-generation.result.loops}}"
+      features: "{{steps.low-level-analysis.result.features}}"
+      frameSampleRate: "{{parameters.frameSampleRate}}"
+    dependsOn: ["loop-generation", "low-level-analysis"]
+    condition: "{{parameters.includeMetadata}}"
+    timeout: 30000
+    retry:
+      attempts: 2
+      backoff: "exponential"
+
+  # Step 12: Compile and store results
+  - id: "compile-results"
+    name: "Compile and Store Results"
+    tool: "essentia_compile_results"
+    parameters:
+      lowLevelFeatures: "{{steps.low-level-analysis.result}}"
+      beats: "{{steps.beat-analysis.result}}"
+      sections: "{{steps.section-detection.result}}"
+      loops: "{{steps.loop-generation.result}}"
+      motifs: "{{steps.motif-analysis.result}}"
+      psychological: "{{steps.psychological-analysis.result}}"
+      storyArc: "{{steps.story-arc-analysis.result}}"
+      sectionMetadata: "{{steps.section-metadata.result}}"
+      loopMetadata: "{{steps.loop-metadata.result}}"
+      fileUrl: "{{parameters.fileUrl}}"
+      analysisType: "{{parameters.analysisType}}"
+      includeMetadata: "{{parameters.includeMetadata}}"
+    dependsOn: ["low-level-analysis", "beat-analysis", "section-detection", "loop-generation"]
+    timeout: 30000
+    retry:
+      attempts: 3
+      backoff: "exponential"
+
+# Error handling
+errorHandling:
+  onStepFailure:
+    retry: true
+    maxRetries: 2
+    fallback:
+      - action: "log_error"
+        parameters:
+          level: "error"
+          message: "Step {{step.id}} failed: {{error.message}}"
+      - action: "continue_workflow"
+        condition: "non-critical-step"
+
+  onWorkflowFailure:
+    cleanup:
+      - action: "delete_temp_files"
+      - action: "log_workflow_failure"
+        parameters:
+          workflowId: "{{workflow.id}}"
+          error: "{{error.message}}"
+    notification:
+      - action: "notify_user"
+        parameters:
+          message: "Audio analysis workflow failed"
+          details: "{{error.message}}"
+
+# Monitoring and observability
+monitoring:
+  metrics:
+    - name: "workflow_duration"
+      type: "histogram"
+      labels: ["analysis_type", "include_metadata"]
+    - name: "step_duration"
+      type: "histogram"
+      labels: ["step_id"]
+    - name: "error_rate"
+      type: "counter"
+      labels: ["step_id", "error_type"]
+
+  logs:
+    level: "info"
+    structured: true
+    retention: "30d"
+
+# Resource requirements
+resources:
+  cpu: "high"  # Audio processing is CPU intensive
+  memory: "128MB"  # Cloudflare Workers limit
+  timeout: "{{parameters.timeout}}"
+  concurrent: 1  # Sequential processing required
+
+# Output schema
+output:
+  success: true
+  fileId: "{{steps.compile-results.result.fileId}}"
+  result:
+    urls: "{{steps.compile-results.result.urls}}"
+    summary:
+      duration: "{{steps.low-level-analysis.result.duration}}"
+      bpm: "{{steps.beat-analysis.result.bpm}}"
+      sections: "{{steps.section-detection.result.sectionCount}}"
+      loops: "{{steps.loop-generation.result.loopCount}}"
+      motifs: "{{steps.motif-analysis.result.motifCount}}"
+      processingTime: "{{workflow.duration}}"
+  metadata:
+    song: "{{steps.story-arc-analysis.result.songMetadata}}"
+    sections: "{{steps.section-metadata.result.sections}}"
+    loops: "{{steps.loop-metadata.result.loops}}"
+    psychological: "{{steps.psychological-analysis.result.psychological}}"
