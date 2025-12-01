@@ -1,0 +1,55 @@
+name = "essentia-audio-analysis"
+main = "worker.js"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Cloudflare Workers configuration
+[build]
+command = "npm run build"
+
+# Environment variables
+[vars]
+FRAME_SAMPLE_RATE = "5"
+WORKER_ENV = "production"
+
+# Environment-specific configurations
+[env.staging]
+name = "essentia-staging"
+vars = { WORKER_ENV = "staging", FRAME_SAMPLE_RATE = "10" }
+
+# R2 bucket for storing analysis results
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "essentiajs"
+preview_bucket_name = "essentiajs-staging"
+
+# Environment variables for different environments
+[env.staging.vars]
+WORKER_ENV = "staging"
+FRAME_SAMPLE_RATE = "10"
+
+# MCP server configuration
+[triggers]
+crons = []
+
+# Custom domains (uncomment when needed)
+# [routes]
+# pattern = "api.yourdomain.com/*"
+# zone_name = "yourdomain.com"
+
+# Workers KV for caching (optional)
+# [[kv_namespaces]]
+# binding = "CACHE"
+# id = "your-kv-namespace-id"
+# preview_id = "your-kv-preview-id"
+
+# Durable Objects for long-running tasks (optional)
+# [[durable_objects.bindings]]
+# name = "AUDIO_PROCESSOR"
+# class_name = "AudioProcessor"
+# script_name = "worker.js"
+
+# Observability
+[observability]
+enabled = true
+head_sampling_rate = 1.0

@@ -18,6 +18,20 @@ The service performs comprehensive audio analysis including:
 - **Harmonic Analysis**: HPCP (chroma), chord detection, inharmonicity, dissonance
 - **High-Level Descriptors**: Danceability, dynamic complexity, audio segmentation
 
+### Enhanced Features (NEW)
+
+- **Beat Markers & Loop Slicing**: Automatic detection of beat positions and generation of loop points (4, 8, 16 beats)
+- **Song Section Detection**: Automatic identification of song sections (verse, chorus, bridge, intro, outro)
+- **Songwriting Metadata**:
+  - **Story Arcs**: Tension/release patterns and narrative structure analysis
+  - **Motifs**: Recurring melodic and harmonic patterns tracked as "characters"
+  - **Quotes**: Repeated musical phrases (melodic and harmonic quotes)
+  - **Psychological Analysis**: Valence (emotion), arousal (energy), emotional trajectory, and paradigm shifts
+- **Hierarchical Metadata**: Structured at three levels:
+  - **Song Level**: Overall analysis, story arcs, psychological profile
+  - **Section Level**: Per-section metadata (verse, chorus, etc.)
+  - **Loop Level**: Beat-aligned loop metadata for slicing and remixing
+
 All analysis results are stored as JSON files in Google Cloud Storage and accessible via public URLs.
 
 ## Features
@@ -76,6 +90,16 @@ All analysis results are stored as JSON files in Google Cloud Storage and access
 - Dynamic complexity
 - Audio segmentation (zero crossing rate)
 
+#### Enhanced Analysis Features
+- **Beat Markers**: Precise beat positions for loop slicing
+- **Loop Points**: Automatic generation of 4, 8, and 16-beat loops
+- **Section Detection**: Verse, chorus, bridge, intro, outro identification
+- **Story Arc Analysis**: Tension/release patterns and narrative structure
+- **Motif Extraction**: Recurring patterns tracked throughout the song
+- **Quote Detection**: Repeated melodic and harmonic phrases
+- **Psychological Descriptors**: Valence, arousal, emotional trajectory
+- **Paradigm Shift Detection**: Identification of sudden emotional/musical changes
+
 ## How To Use
 
 ### Prerequisites
@@ -120,6 +144,11 @@ PORT=8080
 
 # Google Cloud Service Account Key (JSON string)
 service_key='{"type":"service_account","project_id":"your-project-id",...}'
+
+# Frame sampling rate for processing efficiency (default: 5)
+# Set to 1 for full processing, higher values for faster processing
+# Recommended: 5-10 for balanced quality/performance
+FRAME_SAMPLE_RATE=5
 ```
 
 **Important**: The `service_key` should be a JSON string containing your GCP service account credentials. The service account needs Storage Admin permissions on the `essentiajs` bucket.
@@ -156,7 +185,92 @@ Send a POST request with a JSON body containing the audio file URL:
     "dct": "https://storage.googleapis.com/essentiajs/analytics/audio/{uuid}-audio/dct.json",
     "mfcc": "https://storage.googleapis.com/essentiajs/analytics/audio/{uuid}-audio/mfcc.json",
     "chords": "https://storage.googleapis.com/essentiajs/analytics/audio/{uuid}-audio/chords.json",
+    "metadata": "https://storage.googleapis.com/essentiajs/analytics/audio/{uuid}-audio/metadata.json",
     // ... more analysis types
+  }
+}
+```
+
+**Metadata Structure** (`metadata.json`):
+```json
+{
+  "song": {
+    "duration": 390.5,
+    "bpm": 120,
+    "key": "C major",
+    "storyArc": {
+      "tension": [...],
+      "release": [...],
+      "narrativeStructure": "verse-chorus-verse-chorus-bridge-chorus"
+    },
+    "psychological": {
+      "overallValence": 0.7,
+      "overallArousal": 0.8,
+      "emotionalTrajectory": [
+        {"time": 0, "valence": 0.5, "arousal": 0.6},
+        {"time": 60, "valence": 0.8, "arousal": 0.9}
+      ],
+      "paradigmShifts": [
+        {"time": 180, "type": "harmonic", "magnitude": 0.8}
+      ]
+    },
+    "motifs": [
+      {
+        "id": "motif-melodic-0",
+        "type": "melodic",
+        "occurrences": [{"start": 10, "end": 15}, {"start": 70, "end": 75}],
+        "evolution": "variation"
+      }
+    ],
+    "quotes": [
+      {
+        "type": "harmonic",
+        "original": {"start": 20, "end": 30},
+        "quoted": [{"start": 100, "end": 110}]
+      }
+    ]
+  },
+  "sections": [
+    {
+      "type": "verse",
+      "start": 0,
+      "end": 60,
+      "confidence": 0.95,
+      "metadata": {
+        "bpm": 118,
+        "key": "C major",
+        "energy": 0.6,
+        "psychological": {
+          "valence": 0.5,
+          "arousal": 0.6
+        },
+        "motifs": ["motif-melodic-0"],
+        "storyArc": "exposition"
+      }
+    }
+  ],
+  "loops": [
+    {
+      "id": "loop-4-0",
+      "start": 0,
+      "end": 2,
+      "length": 4,
+      "type": "4-beat",
+      "metadata": {
+        "energy": 0.7,
+        "harmony": ["C", "Am", "F", "G"],
+        "psychological": {
+          "valence": 0.6,
+          "arousal": 0.7
+        }
+      }
+    }
+  ],
+  "beatMarkers": {
+    "bpm": 120,
+    "beats": [0, 0.5, 1.0, 1.5, ...],
+    "confidence": 0.95,
+    "totalBeats": 780
   }
 }
 ```
@@ -257,10 +371,14 @@ Essentia/
 │   ├── gcpConfig.js      # Google Cloud Storage configuration
 │   └── index.js          # Configuration module exports
 ├── index.js              # Main Express application and API endpoint
-├── helpers.js             # Helper functions (currently empty)
-├── package.json           # Node.js dependencies and scripts
-├── Dockerfile             # Docker configuration for deployment
-└── README.md              # This file
+├── helpers.js            # Helper functions for enhanced analysis
+│                         # - Beat markers and loop slicing
+│                         # - Section detection
+│                         # - Songwriting metadata extraction
+│                         # - Psychological analysis
+├── package.json          # Node.js dependencies and scripts
+├── Dockerfile            # Docker configuration for deployment
+└── README.md             # This file
 ```
 
 ## Dependencies
@@ -277,15 +395,39 @@ Essentia/
 ### Development Dependencies
 - **@google-cloud/functions-framework**: For local development/testing
 
+## Performance & Optimization
+
+### Frame Sampling
+
+The service uses frame sampling to balance analysis quality with processing time:
+
+- **Default**: Processes every 5th frame (`FRAME_SAMPLE_RATE=5`)
+- **Full Processing**: Set `FRAME_SAMPLE_RATE=1` for complete analysis (slower, more accurate)
+- **Faster Processing**: Increase to 10-20 for quicker results (less detailed)
+
+**Processing Time Estimates** (for 6.5-minute, 10MB file):
+- Frame sampling (5): ~10-30 seconds CPU time
+- Full processing (1): ~84-420 seconds CPU time
+
+### Cost Optimization
+
+- Use frame sampling (5-10) for production workloads
+- Monitor CPU time to stay within platform limits
+- Consider Cloud Run for longer processing times (no 30s CPU limit)
+
 ## Limitations & Notes
 
-1. **Single Frame Processing**: The current implementation processes only the first frame of audio due to a `break` statement in the frame processing loop. This may be intentional for performance but limits the analysis scope.
+1. **Frame Sampling**: By default, processes every 5th frame for efficiency. Adjust `FRAME_SAMPLE_RATE` environment variable to change this.
 
 2. **File Size**: The service accepts large files (up to 10GB URL-encoded), but processing time and memory usage will increase with file size.
 
 3. **Temporary Files**: Audio files are downloaded to the local filesystem temporarily and cleaned up after processing. Ensure sufficient disk space is available.
 
 4. **Cloud Storage**: Results are stored in a public Google Cloud Storage bucket. Ensure proper access controls are configured.
+
+5. **Section Detection**: Section classification (verse/chorus/bridge) uses heuristic analysis. Accuracy may vary depending on musical style.
+
+6. **Motif Detection**: Requires minimum 2 occurrences to be identified as a motif. Adjust threshold in code if needed.
 
 ## Error Handling
 
@@ -317,4 +459,5 @@ Mansoor
 ## Support
 
 For issues, questions, or contributions, please open an issue on the repository.
+
 
