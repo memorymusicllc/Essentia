@@ -66,3 +66,4 @@ echo "   - Check /registry/status endpoint for registration status"
 
 echo ""
 echo "🎉 Essentia Audio Analysis Service deployment complete!"
+

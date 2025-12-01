@@ -369,3 +369,4 @@ export function getRegistryHealth(env) {
     config: REGISTRY_CONFIG
   };
 }
+

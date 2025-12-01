@@ -4,8 +4,7 @@ compatibility_date = "2024-12-01"
 compatibility_flags = ["nodejs_compat"]
 
 # Cloudflare Workers configuration
-[build]
-command = "npm run build"
+# No custom build command needed - Wrangler handles bundling automatically
 
 # Environment variables
 [vars]

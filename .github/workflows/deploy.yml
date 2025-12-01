@@ -90,3 +90,4 @@ jobs:
           # Perform health check
           curl -f $DEPLOYED_URL/health || echo "Health check failed"
         fi
+

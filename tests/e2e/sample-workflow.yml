@@ -232,3 +232,4 @@ output:
     beats: "{{steps.beat-analysis.result}}"
     loops: "{{steps.loop-generation.result}}"
     sampling: "{{steps.sampling-analysis.result}}"
+

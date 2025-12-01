@@ -333,3 +333,4 @@ export function getResourceDefinition(uriPattern) {
 export function getAllResourceDefinitions() {
   return MCP_RESOURCE_DEFINITIONS;
 }
+
