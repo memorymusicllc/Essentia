@@ -1,0 +1,234 @@
+---
+# Sample Audio Analysis Workflow - Beat, Sampling, Looping + Key/BPM
+# Focused workflow for rhythm-based analysis and basic tonal features
+
+name: "sample-audio-analysis"
+version: "1.0.0"
+description: "Sample workflow focusing on beat detection, sampling, looping features, plus key and BPM analysis"
+category: "audio-analysis"
+accessLevel: "authenticated"
+
+# Authentication requirements - minimal scopes for sample analysis
+authentication:
+  pow3rPass:
+    required: true
+    scopes:
+      - "audio:analyze"
+      - "beats:extract"
+      - "metadata:read"
+  rateLimit:
+    requests: 100
+    window: "1h"
+
+# Input parameters - focused set for sample analysis
+parameters:
+  fileUrl:
+    type: "string"
+    description: "HTTPS URL to audio file"
+    validation:
+      pattern: "^https://.+"
+      required: true
+
+  analysisType:
+    type: "string"
+    description: "Type of analysis"
+    default: "sample"
+    enum: ["sample", "basic"]
+    required: false
+
+  frameSampleRate:
+    type: "integer"
+    description: "Frame sampling rate for processing efficiency"
+    default: 5
+    minimum: 1
+    maximum: 20
+    required: false
+
+  timeout:
+    type: "integer"
+    description: "Maximum execution time in milliseconds"
+    default: 120000
+    minimum: 30000
+    maximum: 240000
+    required: false
+
+# Workflow steps - focused on beat/sampling/looping + key/BPM
+steps:
+  # Step 1: Validate input and authentication
+  - id: "validate-input"
+    name: "Validate Input Parameters"
+    tool: "essentia_validate_input"
+    parameters:
+      fileUrl: "{{parameters.fileUrl}}"
+      analysisType: "{{parameters.analysisType}}"
+    timeout: 5000
+    retry:
+      attempts: 1
+      backoff: "fixed"
+
+  # Step 2: Download and process audio file
+  - id: "download-audio"
+    name: "Download Audio File"
+    tool: "essentia_download_audio"
+    parameters:
+      fileUrl: "{{parameters.fileUrl}}"
+      timeout: "{{parameters.timeout}}"
+    dependsOn: ["validate-input"]
+    timeout: 30000
+    retry:
+      attempts: 3
+      backoff: "exponential"
+
+  # Step 3: Perform basic audio analysis (FFT, spectrum)
+  - id: "basic-analysis"
+    name: "Basic Audio Analysis"
+    tool: "essentia_basic_analysis"
+    parameters:
+      audioBuffer: "{{steps.download-audio.result.audioBuffer}}"
+      frameSampleRate: "{{parameters.frameSampleRate}}"
+    dependsOn: ["download-audio"]
+    timeout: 45000
+    retry:
+      attempts: 2
+      backoff: "exponential"
+
+  # Step 4: Extract key and BPM (tonal analysis)
+  - id: "key-bpm-analysis"
+    name: "Key and BPM Analysis"
+    tool: "essentia_key_bpm_analysis"
+    parameters:
+      features: "{{steps.basic-analysis.result.features}}"
+      frameSampleRate: "{{parameters.frameSampleRate}}"
+    dependsOn: ["basic-analysis"]
+    timeout: 15000
+    retry:
+      attempts: 2
+      backoff: "fixed"
+
+  # Step 5: Extract beat markers and rhythm
+  - id: "beat-analysis"
+    name: "Beat Detection and Analysis"
+    tool: "essentia_beat_analysis"
+    parameters:
+      features: "{{steps.basic-analysis.result.features}}"
+      frameSampleRate: "{{parameters.frameSampleRate}}"
+    dependsOn: ["basic-analysis"]
+    timeout: 20000
+    retry:
+      attempts: 2
+      backoff: "fixed"
+
+  # Step 6: Generate loop points from beats
+  - id: "loop-generation"
+    name: "Loop Points Generation"
+    tool: "essentia_loop_generation"
+    parameters:
+      beats: "{{steps.beat-analysis.result.beats}}"
+      loopLengths: [4, 8, 16, 32]  # Extended loop lengths for sampling
+    dependsOn: ["beat-analysis"]
+    timeout: 10000
+    retry:
+      attempts: 1
+      backoff: "fixed"
+
+  # Step 7: Basic sampling analysis
+  - id: "sampling-analysis"
+    name: "Sampling Analysis"
+    tool: "essentia_sampling_analysis"
+    parameters:
+      features: "{{steps.basic-analysis.result.features}}"
+      beats: "{{steps.beat-analysis.result.beats}}"
+      frameSampleRate: "{{parameters.frameSampleRate}}"
+    dependsOn: ["basic-analysis", "beat-analysis"]
+    timeout: 20000
+    retry:
+      attempts: 2
+      backoff: "fixed"
+
+  # Step 8: Compile sample results
+  - id: "compile-sample-results"
+    name: "Compile Sample Results"
+    tool: "essentia_compile_sample_results"
+    parameters:
+      basicFeatures: "{{steps.basic-analysis.result}}"
+      keyBpm: "{{steps.key-bpm-analysis.result}}"
+      beats: "{{steps.beat-analysis.result}}"
+      loops: "{{steps.loop-generation.result}}"
+      sampling: "{{steps.sampling-analysis.result}}"
+      fileUrl: "{{parameters.fileUrl}}"
+      analysisType: "{{parameters.analysisType}}"
+    dependsOn: ["basic-analysis", "key-bpm-analysis", "beat-analysis", "loop-generation", "sampling-analysis"]
+    timeout: 20000
+    retry:
+      attempts: 3
+      backoff: "exponential"
+
+# Error handling - simplified for sample workflow
+errorHandling:
+  onStepFailure:
+    retry: true
+    maxRetries: 2
+    fallback:
+      - action: "log_error"
+        parameters:
+          level: "error"
+          message: "Sample workflow step {{step.id}} failed: {{error.message}}"
+      - action: "continue_workflow"
+        condition: "non-critical-step"
+
+  onWorkflowFailure:
+    cleanup:
+      - action: "delete_temp_files"
+      - action: "log_workflow_failure"
+        parameters:
+          workflowId: "{{workflow.id}}"
+          error: "{{error.message}}"
+    notification:
+      - action: "notify_user"
+        parameters:
+          message: "Sample audio analysis workflow failed"
+          details: "{{error.message}}"
+
+# Monitoring - focused metrics for sample workflow
+monitoring:
+  metrics:
+    - name: "sample_workflow_duration"
+      type: "histogram"
+      labels: ["analysis_type"]
+    - name: "beat_detection_accuracy"
+      type: "gauge"
+      labels: ["confidence_threshold"]
+    - name: "loop_generation_count"
+      type: "counter"
+      labels: ["loop_type"]
+
+  logs:
+    level: "info"
+    structured: true
+    retention: "7d"
+
+# Resource requirements - optimized for sample analysis
+resources:
+  cpu: "medium"  # Less intensive than full analysis
+  memory: "64MB"  # Reduced memory requirements
+  timeout: "{{parameters.timeout}}"
+  concurrent: 1
+
+# Output schema - focused on beat/sampling/looping + key/BPM
+output:
+  success: true
+  fileId: "{{steps.compile-sample-results.result.fileId}}"
+  result:
+    urls: "{{steps.compile-sample-results.result.urls}}"
+    summary:
+      duration: "{{steps.basic-analysis.result.duration}}"
+      key: "{{steps.key-bpm-analysis.result.key}}"
+      bpm: "{{steps.key-bpm-analysis.result.bpm}}"
+      totalBeats: "{{steps.beat-analysis.result.totalBeats}}"
+      loopPoints: "{{steps.loop-generation.result.totalLoops}}"
+      processingTime: "{{workflow.duration}}"
+  metadata:
+    key: "{{steps.key-bpm-analysis.result}}"
+    beats: "{{steps.beat-analysis.result}}"
+    loops: "{{steps.loop-generation.result}}"
+    sampling: "{{steps.sampling-analysis.result}}"

@@ -104,17 +104,33 @@ export BASE_URL="$ESSENTIA_URL"
 export TEST_TIMEOUT=600000
 export FRAME_SAMPLE_RATE=5
 
-# Run the tests
-if [ "$1" = "workflow-only" ]; then
-  echo "Running workflow orchestrator tests only..."
-  npm run test:e2e:workflow
-elif [ "$1" = "essentia-only" ]; then
-  echo "Running essentia tests only..."
-  npm run test:e2e:essentia
-else
-  echo "Running full E2E test suite..."
-  npm run test:e2e
-fi
+# Run the tests based on argument
+case "$1" in
+  "workflow-only")
+    echo "Running workflow orchestrator tests only..."
+    npm run test:e2e:workflow
+    ;;
+  "essentia-only")
+    echo "Running essentia tests only..."
+    npm run test:e2e:essentia
+    ;;
+  "sample-only")
+    echo "Running sample workflow tests only..."
+    npm run test:e2e:sample
+    ;;
+  "full-only")
+    echo "Running full essentia workflow tests only..."
+    npm run test:e2e:full
+    ;;
+  "workflows")
+    echo "Running all workflow tests..."
+    npm run test:e2e:sample && npm run test:e2e:full
+    ;;
+  *)
+    echo "Running complete E2E test suite..."
+    npm run test:e2e
+    ;;
+esac
 
 # Check test results
 if [ $? -eq 0 ]; then

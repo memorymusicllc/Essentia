@@ -1,0 +1,439 @@
+---
+# All Essentia Full Analysis Workflow - Complete Audio Processing
+# Comprehensive workflow using all Essentia.js audio analysis capabilities
+
+name: "all-essentia-analysis"
+version: "1.0.0"
+description: "Complete audio analysis using all Essentia.js capabilities including spectral, temporal, tonal, and high-level features"
+category: "audio-analysis"
+accessLevel: "authenticated"
+
+# Authentication requirements - full access for comprehensive analysis
+authentication:
+  pow3rPass:
+    required: true
+    scopes:
+      - "audio:analyze"
+      - "metadata:read"
+      - "beats:extract"
+      - "sections:detect"
+      - "psychology:analyze"
+  rateLimit:
+    requests: 25
+    window: "1h"
+
+# Input parameters - comprehensive analysis options
+parameters:
+  fileUrl:
+    type: "string"
+    description: "HTTPS URL to audio file"
+    validation:
+      pattern: "^https://.+"
+      required: true
+
+  analysisType:
+    type: "string"
+    description: "Type of analysis"
+    default: "full"
+    enum: ["full", "comprehensive"]
+    required: false
+
+  includeMetadata:
+    type: "boolean"
+    description: "Include enhanced songwriting metadata"
+    default: true
+    required: false
+
+  frameSampleRate:
+    type: "integer"
+    description: "Frame sampling rate for processing efficiency"
+    default: 5
+    minimum: 1
+    maximum: 20
+    required: false
+
+  timeout:
+    type: "integer"
+    description: "Maximum execution time in milliseconds"
+    default: 300000
+    minimum: 120000
+    maximum: 600000
+    required: false
+
+# Workflow steps - complete Essentia analysis pipeline
+steps:
+  # Step 1: Validate input and authentication
+  - id: "validate-input"
+    name: "Validate Input Parameters"
+    tool: "essentia_validate_input"
+    parameters:
+      fileUrl: "{{parameters.fileUrl}}"
+      analysisType: "{{parameters.analysisType}}"
+      includeMetadata: "{{parameters.includeMetadata}}"
+    timeout: 5000
+    retry:
+      attempts: 1
+      backoff: "fixed"
+
+  # Step 2: Download and decode audio file
+  - id: "download-audio"
+    name: "Download and Decode Audio File"
+    tool: "essentia_download_audio"
+    parameters:
+      fileUrl: "{{parameters.fileUrl}}"
+      timeout: "{{parameters.timeout}}"
+    dependsOn: ["validate-input"]
+    timeout: 60000
+    retry:
+      attempts: 3
+      backoff: "exponential"
+
+  # Step 3: Complete low-level audio analysis
+  - id: "low-level-analysis"
+    name: "Low-Level Audio Analysis"
+    tool: "essentia_low_level_analysis"
+    parameters:
+      audioBuffer: "{{steps.download-audio.result.audioBuffer}}"
+      frameSampleRate: "{{parameters.frameSampleRate}}"
+      analysisType: "{{parameters.analysisType}}"
+    dependsOn: ["download-audio"]
+    timeout: 90000
+    retry:
+      attempts: 2
+      backoff: "exponential"
+
+  # Step 4: Spectral analysis (FFT, DCT, spectral features)
+  - id: "spectral-analysis"
+    name: "Spectral Feature Analysis"
+    tool: "essentia_spectral_analysis"
+    parameters:
+      spectrum: "{{steps.low-level-analysis.result.spectrum}}"
+      frameSampleRate: "{{parameters.frameSampleRate}}"
+    dependsOn: ["low-level-analysis"]
+    timeout: 30000
+    retry:
+      attempts: 2
+      backoff: "fixed"
+
+  # Step 5: Frequency band analysis (Bark, Mel, ERB)
+  - id: "frequency-band-analysis"
+    name: "Frequency Band Analysis"
+    tool: "essentia_frequency_band_analysis"
+    parameters:
+      spectrum: "{{steps.low-level-analysis.result.spectrum}}"
+      frameSampleRate: "{{parameters.frameSampleRate}}"
+    dependsOn: ["low-level-analysis"]
+    timeout: 30000
+    retry:
+      attempts: 2
+      backoff: "fixed"
+
+  # Step 6: Cepstral analysis (MFCC, GFCC)
+  - id: "cepstral-analysis"
+    name: "Cepstral Analysis"
+    tool: "essentia_cepstral_analysis"
+    parameters:
+      spectrum: "{{steps.low-level-analysis.result.spectrum}}"
+      frameSampleRate: "{{parameters.frameSampleRate}}"
+    dependsOn: ["low-level-analysis"]
+    timeout: 30000
+    retry:
+      attempts: 2
+      backoff: "fixed"
+
+  # Step 7: Pitch and tonal analysis
+  - id: "pitch-tonal-analysis"
+    name: "Pitch and Tonal Analysis"
+    tool: "essentia_pitch_tonal_analysis"
+    parameters:
+      spectrum: "{{steps.low-level-analysis.result.spectrum}}"
+      frameSampleRate: "{{parameters.frameSampleRate}}"
+    dependsOn: ["low-level-analysis"]
+    timeout: 45000
+    retry:
+      attempts: 2
+      backoff: "exponential"
+
+  # Step 8: Rhythm and tempo analysis
+  - id: "rhythm-analysis"
+    name: "Rhythm and Tempo Analysis"
+    tool: "essentia_rhythm_analysis"
+    parameters:
+      audioBuffer: "{{steps.download-audio.result.audioBuffer}}"
+      frameSampleRate: "{{parameters.frameSampleRate}}"
+    dependsOn: ["download-audio"]
+    timeout: 60000
+    retry:
+      attempts: 2
+      backoff: "exponential"
+
+  # Step 9: Harmonic analysis (HPCP, chords, dissonance)
+  - id: "harmonic-analysis"
+    name: "Harmonic Analysis"
+    tool: "essentia_harmonic_analysis"
+    parameters:
+      spectrum: "{{steps.low-level-analysis.result.spectrum}}"
+      frequencies: "{{steps.pitch-tonal-analysis.result.frequencies}}"
+      magnitudes: "{{steps.pitch-tonal-analysis.result.magnitudes}}"
+      frameSampleRate: "{{parameters.frameSampleRate}}"
+    dependsOn: ["low-level-analysis", "pitch-tonal-analysis"]
+    timeout: 45000
+    retry:
+      attempts: 2
+      backoff: "exponential"
+
+  # Step 10: High-level descriptors
+  - id: "high-level-descriptors"
+    name: "High-Level Descriptors"
+    tool: "essentia_high_level_descriptors"
+    parameters:
+      features: "{{steps.low-level-analysis.result.features}}"
+      spectrum: "{{steps.low-level-analysis.result.spectrum}}"
+      rhythm: "{{steps.rhythm-analysis.result}}"
+      frameSampleRate: "{{parameters.frameSampleRate}}"
+    dependsOn: ["low-level-analysis", "rhythm-analysis"]
+    timeout: 30000
+    retry:
+      attempts: 2
+      backoff: "fixed"
+
+  # Step 11: Beat detection and analysis
+  - id: "beat-analysis"
+    name: "Beat Detection and Analysis"
+    tool: "essentia_beat_analysis"
+    parameters:
+      features: "{{steps.low-level-analysis.result.features}}"
+      frameSampleRate: "{{parameters.frameSampleRate}}"
+    dependsOn: ["low-level-analysis"]
+    timeout: 30000
+    retry:
+      attempts: 2
+      backoff: "fixed"
+
+  # Step 12: Song section detection
+  - id: "section-detection"
+    name: "Song Section Detection"
+    tool: "essentia_section_detection"
+    parameters:
+      features: "{{steps.low-level-analysis.result.features}}"
+      frameSampleRate: "{{parameters.frameSampleRate}}"
+    dependsOn: ["low-level-analysis"]
+    timeout: 30000
+    retry:
+      attempts: 2
+      backoff: "fixed"
+
+  # Step 13: Generate loop points
+  - id: "loop-generation"
+    name: "Loop Points Generation"
+    tool: "essentia_loop_generation"
+    parameters:
+      beats: "{{steps.beat-analysis.result.beats}}"
+      loopLengths: [4, 8, 16, 32]
+    dependsOn: ["beat-analysis"]
+    timeout: 15000
+    retry:
+      attempts: 1
+      backoff: "fixed"
+
+  # Step 14: Motif and quote analysis (conditional)
+  - id: "motif-analysis"
+    name: "Motif and Quote Analysis"
+    tool: "essentia_motif_analysis"
+    parameters:
+      melody: "{{steps.pitch-tonal-analysis.result.pitchMelody}}"
+      harmony: "{{steps.harmonic-analysis.result.chords}}"
+      frameSampleRate: "{{parameters.frameSampleRate}}"
+    dependsOn: ["pitch-tonal-analysis", "harmonic-analysis"]
+    condition: "{{parameters.includeMetadata}}"
+    timeout: 45000
+    retry:
+      attempts: 2
+      backoff: "exponential"
+
+  # Step 15: Psychological analysis (conditional)
+  - id: "psychological-analysis"
+    name: "Psychological Descriptors Analysis"
+    tool: "essentia_psychological_analysis"
+    parameters:
+      danceability: "{{steps.high-level-descriptors.result.danceability}}"
+      energy: "{{steps.spectral-analysis.result.complexity}}"
+      tempo: "{{steps.rhythm-analysis.result.bpm}}"
+      frameSampleRate: "{{parameters.frameSampleRate}}"
+    dependsOn: ["high-level-descriptors", "rhythm-analysis"]
+    condition: "{{parameters.includeMetadata}}"
+    timeout: 30000
+    retry:
+      attempts: 2
+      backoff: "exponential"
+
+  # Step 16: Story arc analysis (conditional)
+  - id: "story-arc-analysis"
+    name: "Story Arc Analysis"
+    tool: "essentia_story_arc_analysis"
+    parameters:
+      melody: "{{steps.pitch-tonal-analysis.result.pitchMelody}}"
+      harmony: "{{steps.harmonic-analysis.result.chords}}"
+      frameSampleRate: "{{parameters.frameSampleRate}}"
+    dependsOn: ["pitch-tonal-analysis", "harmonic-analysis", "motif-analysis"]
+    condition: "{{parameters.includeMetadata}}"
+    timeout: 30000
+    retry:
+      attempts: 2
+      backoff: "exponential"
+
+  # Step 17: Section-level metadata (conditional)
+  - id: "section-metadata"
+    name: "Section-Level Metadata"
+    tool: "essentia_section_metadata"
+    parameters:
+      sections: "{{steps.section-detection.result.sections}}"
+      features: "{{steps.low-level-analysis.result.features}}"
+      frameSampleRate: "{{parameters.frameSampleRate}}"
+    dependsOn: ["section-detection", "low-level-analysis"]
+    condition: "{{parameters.includeMetadata}}"
+    timeout: 30000
+    retry:
+      attempts: 2
+      backoff: "exponential"
+
+  # Step 18: Loop-level metadata (conditional)
+  - id: "loop-metadata"
+    name: "Loop-Level Metadata"
+    tool: "essentia_loop_metadata"
+    parameters:
+      loops: "{{steps.loop-generation.result.loops}}"
+      features: "{{steps.low-level-analysis.result.features}}"
+      frameSampleRate: "{{parameters.frameSampleRate}}"
+    dependsOn: ["loop-generation", "low-level-analysis"]
+    condition: "{{parameters.includeMetadata}}"
+    timeout: 30000
+    retry:
+      attempts: 2
+      backoff: "exponential"
+
+  # Step 19: Compile comprehensive results
+  - id: "compile-full-results"
+    name: "Compile Complete Analysis Results"
+    tool: "essentia_compile_full_results"
+    parameters:
+      lowLevelFeatures: "{{steps.low-level-analysis.result}}"
+      spectralFeatures: "{{steps.spectral-analysis.result}}"
+      frequencyBands: "{{steps.frequency-band-analysis.result}}"
+      cepstralFeatures: "{{steps.cepstral-analysis.result}}"
+      pitchTonal: "{{steps.pitch-tonal-analysis.result}}"
+      rhythmTempo: "{{steps.rhythm-analysis.result}}"
+      harmonicFeatures: "{{steps.harmonic-analysis.result}}"
+      highLevelDescriptors: "{{steps.high-level-descriptors.result}}"
+      beats: "{{steps.beat-analysis.result}}"
+      sections: "{{steps.section-detection.result}}"
+      loops: "{{steps.loop-generation.result}}"
+      motifs: "{{steps.motif-analysis.result}}"
+      psychological: "{{steps.psychological-analysis.result}}"
+      storyArc: "{{steps.story-arc-analysis.result}}"
+      sectionMetadata: "{{steps.section-metadata.result}}"
+      loopMetadata: "{{steps.loop-metadata.result}}"
+      fileUrl: "{{parameters.fileUrl}}"
+      analysisType: "{{parameters.analysisType}}"
+      includeMetadata: "{{parameters.includeMetadata}}"
+    dependsOn: ["low-level-analysis", "spectral-analysis", "frequency-band-analysis", "cepstral-analysis", "pitch-tonal-analysis", "rhythm-analysis", "harmonic-analysis", "high-level-descriptors", "beat-analysis", "section-detection", "loop-generation"]
+    timeout: 60000
+    retry:
+      attempts: 3
+      backoff: "exponential"
+
+# Error handling - comprehensive for full analysis
+errorHandling:
+  onStepFailure:
+    retry: true
+    maxRetries: 2
+    fallback:
+      - action: "log_error"
+        parameters:
+          level: "error"
+          message: "Full analysis step {{step.id}} failed: {{error.message}}"
+      - action: "continue_workflow"
+        condition: "non-critical-step"
+      - action: "degrade_analysis"
+        parameters:
+          step: "{{step.id}}"
+          fallback: "basic-analysis"
+
+  onWorkflowFailure:
+    cleanup:
+      - action: "delete_temp_files"
+      - action: "log_workflow_failure"
+        parameters:
+          workflowId: "{{workflow.id}}"
+          error: "{{error.message}}"
+          failedSteps: "{{workflow.failedSteps}}"
+    notification:
+      - action: "notify_user"
+        parameters:
+          message: "Complete Essentia analysis workflow failed"
+          details: "{{error.message}}"
+          partialResults: "{{workflow.partialResults}}"
+
+# Monitoring - comprehensive metrics for full analysis
+monitoring:
+  metrics:
+    - name: "full_analysis_duration"
+      type: "histogram"
+      labels: ["analysis_type", "include_metadata"]
+    - name: "feature_extraction_time"
+      type: "histogram"
+      labels: ["feature_type"]
+    - name: "analysis_completion_rate"
+      type: "gauge"
+      labels: ["feature_category"]
+    - name: "resource_utilization"
+      type: "gauge"
+      labels: ["resource_type"]
+
+  logs:
+    level: "info"
+    structured: true
+    retention: "30d"
+
+# Resource requirements - full analysis is CPU and memory intensive
+resources:
+  cpu: "high"
+  memory: "128MB"
+  timeout: "{{parameters.timeout}}"
+  concurrent: 1  # Sequential processing required for comprehensive analysis
+
+# Output schema - complete Essentia analysis results
+output:
+  success: true
+  fileId: "{{steps.compile-full-results.result.fileId}}"
+  result:
+    urls: "{{steps.compile-full-results.result.urls}}"
+    summary:
+      duration: "{{steps.low-level-analysis.result.duration}}"
+      sampleRate: "{{steps.low-level-analysis.result.sampleRate}}"
+      channels: "{{steps.low-level-analysis.result.channels}}"
+      key: "{{steps.pitch-tonal-analysis.result.key}}"
+      bpm: "{{steps.rhythm-analysis.result.bpm}}"
+      totalBeats: "{{steps.beat-analysis.result.totalBeats}}"
+      sections: "{{steps.section-detection.result.sectionCount}}"
+      loopPoints: "{{steps.loop-generation.result.totalLoops}}"
+      motifs: "{{steps.motif-analysis.result.motifCount}}"
+      processingTime: "{{workflow.duration}}"
+  metadata:
+    spectral: "{{steps.spectral-analysis.result}}"
+    frequencyBands: "{{steps.frequency-band-analysis.result}}"
+    cepstral: "{{steps.cepstral-analysis.result}}"
+    pitchTonal: "{{steps.pitch-tonal-analysis.result}}"
+    rhythm: "{{steps.rhythm-analysis.result}}"
+    harmonic: "{{steps.harmonic-analysis.result}}"
+    highLevel: "{{steps.high-level-descriptors.result}}"
+    beats: "{{steps.beat-analysis.result}}"
+    sections: "{{steps.section-detection.result}}"
+    loops: "{{steps.loop-generation.result}}"
+    songwriting:
+      motifs: "{{steps.motif-analysis.result}}"
+      psychological: "{{steps.psychological-analysis.result}}"
+      storyArc: "{{steps.story-arc-analysis.result}}"
+    hierarchical:
+      sections: "{{steps.section-metadata.result}}"
+      loops: "{{steps.loop-metadata.result}}"
