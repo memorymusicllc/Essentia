@@ -10,9 +10,15 @@ A cloud-based audio analysis service that performs comprehensive audio feature e
 - 🤖 **MCP Server**: Model Context Protocol for AI agent integration
 - 🧪 **E2E Testing**: Comprehensive test coverage with automated deployment
 
+**📚 Documentation**:
+- [MCP Usage Guide](./docs/MCP-USAGE.md) - Complete guide for using MCP Server
+- [Guardian](./docs/GUARDIAN.md) - Service architecture and best practices
+
 ## Overview
 
-Essentia is a Node.js/Express service that leverages the Essentia.js library (a JavaScript port of the Essentia audio analysis library) to extract detailed audio features from audio files. The service is designed to run on Google Cloud Run and provides a RESTful API for audio analysis tasks.
+Essentia is a Cloudflare Edge-based audio analysis service that leverages the Essentia.js library (a JavaScript port of the Essentia audio analysis library) to extract detailed audio features from audio files. The service runs on Cloudflare Workers and provides a **Model Context Protocol (MCP) Server** interface for AI agents and automated workflows.
+
+**⚠️ Important**: All interactions must use the **MCP Server with Pow3r Pass authentication**. Do not call REST APIs directly.
 
 ## What It Does
 
@@ -40,7 +46,7 @@ The service performs comprehensive audio analysis including:
   - **Section Level**: Per-section metadata (verse, chorus, etc.)
   - **Loop Level**: Beat-aligned loop metadata for slicing and remixing
 
-All analysis results are stored as JSON files in Google Cloud Storage and accessible via public URLs.
+All analysis results are stored as JSON files in Cloudflare R2 and accessible via MCP resources or public URLs.
 
 ## Features
 
@@ -110,77 +116,66 @@ All analysis results are stored as JSON files in Google Cloud Storage and access
 
 ## How To Use
 
+### ⚠️ Important: Use MCP Server, Not Direct API Calls
+
+**All interactions must use the MCP Server with Pow3r Pass authentication. Do not call REST APIs directly.**
+
+See [MCP Usage Guide](./docs/MCP-USAGE.md) for complete documentation.
+
 ### Prerequisites
 
-- Node.js 14 or higher
-- Google Cloud Platform account with:
-  - Cloud Storage bucket (`essentiajs`)
-  - Service account with Storage Admin permissions
-- Environment variables configured (see Configuration)
+- Pow3r Pass token from `config.superbots.link`
+- Required scopes: `audio:analyze`, `metadata:read`, etc.
+- MCP client or HTTP client supporting JSON-RPC 2.0
 
-### Installation
+### Quick Start
 
-1. Clone the repository:
 ```bash
-git clone <repository-url>
-cd Essentia
+# Set your Pow3r Pass token
+export POW3R_PASS_TOKEN="your_pow3r_pass_token"
+
+# Use MCP server (see docs/MCP-USAGE.md for details)
+curl -X POST https://essentia-audio-analysis.contact-7d8.workers.dev \
+  -H "Content-Type: application/json" \
+  -H "MCP-Protocol-Version: 2024-11-05" \
+  -H "Authorization: Bearer $POW3R_PASS_TOKEN" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call",
+    "params": {
+      "name": "analyze_audio",
+      "arguments": {
+        "fileUrl": "https://example.com/audio.mp3",
+        "includeMetadata": true
+      }
+    }
+  }'
 ```
 
-2. Install dependencies:
-```bash
-npm install
-```
+### MCP Server Usage
 
-3. Configure environment variables (see Configuration section)
+**Endpoint**: `https://essentia-audio-analysis.contact-7d8.workers.dev`
 
-4. Start the service:
-```bash
-# Development mode (with nodemon)
-npm run dev
+**Required Headers**:
+- `Content-Type: application/json`
+- `MCP-Protocol-Version: 2024-11-05`
+- `Authorization: Bearer <pow3r_pass_token>`
 
-# Production mode
-npm start
-```
+**Available Tools**:
+- `analyze_audio` - Full audio analysis with metadata
+- `extract_beats` - Beat markers and tempo
+- `detect_sections` - Song section detection
+- `analyze_psychology` - Psychological descriptors
+- `get_metadata` - Retrieve stored results
 
-### Configuration
+See [MCP Usage Guide](./docs/MCP-USAGE.md) for complete documentation and examples.
 
-Create a `.env` file in the root directory with the following variables:
+### Legacy REST API (Deprecated)
 
-```env
-# Server port (default: 8080)
-PORT=8080
+⚠️ **The REST API is deprecated. Use MCP Server instead.**
 
-# Google Cloud Service Account Key (JSON string)
-service_key='{"type":"service_account","project_id":"your-project-id",...}'
-
-# Frame sampling rate for processing efficiency (default: 5)
-# Set to 1 for full processing, higher values for faster processing
-# Recommended: 5-10 for balanced quality/performance
-FRAME_SAMPLE_RATE=5
-```
-
-**Important**: The `service_key` should be a JSON string containing your GCP service account credentials. The service account needs Storage Admin permissions on the `essentiajs` bucket.
-
-### API Usage
-
-#### Endpoint
-
-**POST** `/`
-
-#### Request
-
-Send a POST request with a JSON body containing the audio file URL:
-
-```json
-{
-  "fileUrl": "https://example.com/audio.mp3"
-}
-```
-
-**Requirements**:
-- `fileUrl` must be a valid HTTPS URL
-- The URL must point to an accessible audio file
-- Supported formats: MP3, WAV, OGG, FLAC, etc. (formats supported by Essentia.js)
+The REST API endpoint exists for backward compatibility but should not be used for new integrations. All new code should use the MCP server interface.
 
 #### Response
 
@@ -293,22 +288,57 @@ Send a POST request with a JSON body containing the audio file URL:
 
 #### Example Usage
 
-**Using cURL**:
+**Using MCP Server (Recommended)**:
+
 ```bash
-curl -X POST http://localhost:8080/ \
+# Set Pow3r Pass token
+export POW3R_PASS_TOKEN="your_token"
+
+# Use the provided script
+node scripts/analyze-via-mcp.js https://example.com/audio.mp3
+
+# Or use cURL directly
+curl -X POST https://essentia-audio-analysis.contact-7d8.workers.dev \
   -H "Content-Type: application/json" \
-  -d '{"fileUrl": "https://example.com/sample.mp3"}'
+  -H "MCP-Protocol-Version: 2024-11-05" \
+  -H "Authorization: Bearer $POW3R_PASS_TOKEN" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call",
+    "params": {
+      "name": "analyze_audio",
+      "arguments": {
+        "fileUrl": "https://example.com/audio.mp3",
+        "includeMetadata": true
+      }
+    }
+  }'
 ```
 
-**Using JavaScript (fetch)**:
+**Using JavaScript (MCP)**:
 ```javascript
-const response = await fetch('http://localhost:8080/', {
+const POW3R_PASS_TOKEN = process.env.POW3R_PASS_TOKEN;
+const MCP_ENDPOINT = 'https://essentia-audio-analysis.contact-7d8.workers.dev';
+
+const response = await fetch(MCP_ENDPOINT, {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
+    'MCP-Protocol-Version': '2024-11-05',
+    'Authorization': `Bearer ${POW3R_PASS_TOKEN}`
   },
   body: JSON.stringify({
-    fileUrl: 'https://example.com/sample.mp3'
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'tools/call',
+    params: {
+      name: 'analyze_audio',
+      arguments: {
+        fileUrl: 'https://example.com/audio.mp3',
+        includeMetadata: true
+      }
+    }
   })
 });
 
@@ -316,59 +346,78 @@ const data = await response.json();
 console.log(data);
 ```
 
-**Using Python (requests)**:
+**Using Python (MCP)**:
 ```python
+import os
 import requests
 
+POW3R_PASS_TOKEN = os.environ.get('POW3R_PASS_TOKEN')
+MCP_ENDPOINT = 'https://essentia-audio-analysis.contact-7d8.workers.dev'
+
 response = requests.post(
-    'http://localhost:8080/',
-    json={'fileUrl': 'https://example.com/sample.mp3'}
+    MCP_ENDPOINT,
+    headers={
+        'Content-Type': 'application/json',
+        'MCP-Protocol-Version': '2024-11-05',
+        'Authorization': f'Bearer {POW3R_PASS_TOKEN}'
+    },
+    json={
+        'jsonrpc': '2.0',
+        'id': 1,
+        'method': 'tools/call',
+        'params': {
+            'name': 'analyze_audio',
+            'arguments': {
+                'fileUrl': 'https://example.com/audio.mp3',
+                'includeMetadata': True
+            }
+        }
+    }
 )
 
 data = response.json()
 print(data)
 ```
 
+See [MCP Usage Guide](./docs/MCP-USAGE.md) for complete examples and documentation.
+
 ### Deployment
 
-#### Google Cloud Run
+#### Cloudflare Workers
 
-The service includes a deployment script for Google Cloud Run:
+The service is deployed to Cloudflare Workers:
 
 ```bash
 npm run deploy
 ```
 
 This command:
-1. Builds a Docker image
-2. Pushes it to Google Container Registry
-3. Deploys to Cloud Run
-4. Configures traffic routing
+1. Patches Essentia.js for Cloudflare Workers compatibility
+2. Bundles the worker code
+3. Deploys to Cloudflare Workers
+4. Configures R2 bucket bindings
 
-#### Manual Docker Deployment
+#### Environment Variables
 
-1. Build the Docker image:
-```bash
-docker build -t essentia .
-```
+Configure in `wrangler.toml` or via Cloudflare dashboard:
 
-2. Run the container:
-```bash
-docker run -p 8080:8080 \
-  -e PORT=8080 \
-  -e service_key='<your-service-key-json>' \
-  essentia
-```
+- `FRAME_SAMPLE_RATE`: Frame sampling rate (default: 5)
+- `WORKER_ENV`: Environment (production/staging)
+- `R2_BUCKET`: R2 bucket binding (configured in wrangler.toml)
 
 ### Accessing Results
 
-After a successful analysis, each analysis type is stored as a separate JSON file in Cloudflare R2. You can access them via the URLs returned in the response:
+After a successful analysis via MCP, results are returned in the MCP response. You can also access stored results using the `get_metadata` tool:
 
 ```javascript
-// Example: Accessing MFCC results
-const mfccUrl = result.mfcc; // From API response
-const mfccData = await fetch(mfccUrl).then(r => r.json());
-console.log(mfccData);
+// Get metadata via MCP
+const result = await callMCPTool('get_metadata', {
+  fileId: 'abc123',
+  metadataType: 'all'
+});
+
+// Results are also available as MCP resources
+// Use resources/list to discover available resources
 ```
 
 ### E2E Testing & Pow3r Integration

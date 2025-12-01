@@ -187,3 +187,6 @@ jobs:
         echo "- Registry: ${{ secrets.ESSENTIA_URL }}/registry/status" >> $GITHUB_STEP_SUMMARY
         echo "- MCP: ${{ secrets.ESSENTIA_URL }}/mcp" >> $GITHUB_STEP_SUMMARY
 
+
+
+

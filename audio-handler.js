@@ -7,7 +7,8 @@
  * @module audio-handler
  */
 
-import { Essentia, EssentiaWASM } from 'essentia.js';
+// Use custom loader to avoid UMD/eval issues in Cloudflare Workers
+import { Essentia, EssentiaWASM, EssentiaReady } from './lib/essentia-loader.js';
 import { v4 as uuid } from 'uuid';
 import * as helpers from './helpers.js';
 import { getR2Bucket, uploadToR2, getR2PublicUrl } from './config/r2Config.js';
@@ -48,8 +49,11 @@ export async function handleAudioAnalysis(request, env) {
     const audioBuffer = await downloadAudioFile(fileUrl);
     console.log('Audio file downloaded, size:', audioBuffer.byteLength);
 
-    // Initialize Essentia
-    const essentia = new Essentia(EssentiaWASM);
+    // Initialize Essentia with async WASM support for Cloudflare Workers
+    // Wait for WASM to be ready
+    console.log('Waiting for Essentia WASM to initialize...');
+    const { Essentia: EssentiaReadyClass, EssentiaWASM: EssentiaWASMReady } = await EssentiaReady;
+    const essentia = new EssentiaReadyClass(EssentiaWASMReady);
 
     // Process audio with frame sampling for efficiency
     const results = await processAudioWithEssentia(audioBuffer, essentia, env);
